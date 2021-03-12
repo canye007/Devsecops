@@ -30,3 +30,59 @@ pipeline {
      }
    }
 }
+
+
+========================================================================================
+pipeline {
+    agent any
+    triggers {
+      pollSCM('* * * * *')
+    }
+    stages {
+        stage("Build Docker Image and Push Image to ECR") {
+            steps {
+                echo 'Push Image to ECR'
+                script {
+                    docker.withRegistry('https://857548234366.dkr.ecr.us-east-1.amazonaws.com', 'ecr:us-east-1:devops-jenkins-aws-secrets') {
+                      def customImage = docker.build("owasp-zap-proxy:${env.BUILD_ID}")  
+                      customImage.push("latest")
+                    }
+                }
+            }
+        }
+        stage("Pull Docker from ECR") {
+            steps {
+                echo 'Pull Image to ECR'
+                script {
+                    docker.withRegistry('https://857548234366.dkr.ecr.us-east-1.amazonaws.com', 'ecr:us-east-1:devops-jenkins-aws-secrets') {
+                      def customImage = docker.pull("owasp-zap-proxy:${env.BUILD_ID}")  
+                      customImage.pull("latest")
+                    }
+                }
+            }
+        }
+        stage ("Dynamic Analysis - DAST with OWASP ZAP") {
+			steps {
+				sh "docker run -t owasp/zap2docker-stable zap-baseline.py -t http://eureka-staging.apps.pecos-staging.cpi.cmscloud.local || true"
+			}
+		
+		}
+    }
+}
+zap-baseline-scan:
+  stage: integration
+  script:
+    -docker pull owasp/zap2docker-stable
+    -docker run --rm owasp/zap2docker-stable zap-full-scan.py -t <target endpoint url> -j zap-output.json
+  after_script:
+    -docker rmi owasp/zap2docker-stable ##clean up the image from the sever
+
+ 
+
+zap-full-scan:
+  stage: integration
+  script:
+    -docker pull owasp/zap2docker-stable
+    -docker run -rm owasp/zap2docker-stable zap-full-scan.py -t <target endpoint url> -j zap-output.json
+  after_script:
+    -docker rmi owasp/zap2docker-stable ##clean up the image from the sever
