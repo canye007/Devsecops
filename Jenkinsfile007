@@ -1,0 +1,32 @@
+pipeline {
+    agent any
+    /*triggers {
+      pollSCM('* * * * *')
+    }*/
+    stages {
+        stage('SAST-dependency-Check-report') {
+            steps {     
+                sh "/apps/scripts/owasp-dependency-check.sh $JOB_NAME" 
+              }
+        }
+        stage("Dynamic Analysis - DAST with OWASP ZAP") {
+		      	steps {
+				        sh "docker run -t 857548234366.dkr.ecr.us-east-1.amazonaws.com/zap-proxy zap-full-scan.py -t http://$JOB_NAME-staging.apps.pecos-staging.cpi.cmscloud.local || true"
+		  	}
+	  	}
+   }
+ 	post {
+        always {
+            dir('/apps/scripts/') {
+                    emailext attachLog: true, attachmentsPattern: 'owasp-dependency-scheck.html',
+                    from: 'PECOS2.0DevSecOpsCMTeam@cgifederal.com',
+                    to: 'clifford.anye@cgifederal.com',
+                    body: "Job ${env.JOB_NAME} build ${env.BUILD_NUMBER}\n More info at: ${env.BUILD_URL}\n\nAttached are owasp and dependency check Test results",
+                    subject: "Jenkins Vulnerability Scan : Job ${env.JOB_NAME} owasp and dependency check Test results"
+             }
+            script{
+              	echo 'Jenkins job completed'
+            }
+     }
+   }
+}
